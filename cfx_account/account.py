@@ -55,6 +55,7 @@ from eth_account.datastructures import (
 )
 from cfx_account._utils.signing import (
     sign_transaction_dict,
+    sign_transaction_dict_post_quantum,
 )
 from cfx_account._utils.transactions import (
     Transaction,
@@ -63,6 +64,7 @@ from cfx_account._utils.transactions import (
 from cfx_address import (
     Base32Address,
     eth_eoa_address_to_cfx_hex,
+    public_key_to_cfx_hex,
 )
 from cfx_address.utils import (
     normalize_to,
@@ -79,6 +81,11 @@ from cfx_utils.decorators import (
 from cfx_account.types import (
     KeyfileDict,
 )
+import ctypes
+import cffi
+import binascii
+from cfx_account._utils.account_ffi import Pffi
+import array
 
 if TYPE_CHECKING:
     from conflux_web3 import Web3
@@ -131,6 +138,151 @@ class Account(EthAccount):
             # if self.w3 is set, use self.w3.cfx.chain_id
             network_id or (self.w3 and self.w3.cfx.chain_id)
         )
+
+    @combomethod
+    def sign_transaction_elliptic_curve(
+        self, transaction_dict: TxParam, private_key: Union[bytes, str, PrivateKey]
+    ) -> SignedTransaction:
+        """
+        Sign a transaction using a local private key. Produces signature details
+        and the hex-encoded transaction suitable for broadcast using
+        :meth:`w3.cfx.send_raw_transaction() <conflux_web3.client.ConfluxClient.send_raw_transaction>`.
+
+        Refer to `Interact with a Contract
+        <https://python-conflux-sdk.readthedocs.io/en/latest/examples/10-send_raw_transaction.html#interact-with-a-contract>`_
+        to see how to sign for a contract method using `build_transaction`
+
+        :param TxParam transaction_dict: the transaction with keys:
+          nonce, chainId, to, data, value, storageLimit, epochHeight, gas, and gasPrice.
+        :param Union[bytes,str,PrivateKey] private_key: private_key to be used for signing
+        :raises TypeError: transaction_dict is not a dict-like object
+        :raises ValueError: transaction's from field does not match private_key
+        :return SignedTransaction: an attribute dict contains various details about the signature - most
+          importantly the fields: v, r, and s
+    
+        >>> transaction = {
+                # Note that the address must be in Base32 format or native bytes:
+                'to': 'cfxtest:aak7fsws4u4yf38fk870218p1h3gxut3ku00u1k1da',
+                'nonce': 1,
+                'value': 1,
+                'gas': 100,
+                'gasPrice': 1,
+                'storageLimit': 100,
+                'epochHeight': 100,
+                'chainId': 1
+            }
+        >>> key = '0xcc7939276283a32f60d2fad7d16cac972300308fe99ec98d0e63765d02e24863'
+        >>> signed = Account.sign_transaction(transaction, key)
+        {'hash': HexBytes('0x692a0ea530a264f4e80ce39f393233e90638ef929c8706802e15299fd0b042b9'),
+            'r': 74715349327018893060702835194036838027583623083228589573427622179540208747230,
+            'rawTransaction': HexBytes('0xf861dd0101649413d2ba4ed43542e7c54fbb6c5fccb9f269c1f94c016464018080a0a52f639cbed11262a7b88d0a37aef909aa7dc2c36c40689a3d52b8bd1d9482dea054f3bdeb654f73704db4cbc12451fb4c9830ef62b0f24de1a40e4b6fe10f57b2'),  # noqa: E501
+            's': 38424933894051759888751352802050752143518665905311311986258635963723328477106,
+            'v': 0}
+        >>> w3.cfx.sendRawTransaction(signed.rawTransaction)
+        """
+
+        if not isinstance(transaction_dict, Mapping):
+            raise TypeError("transaction_dict must be dict-like, got %r" % transaction_dict)
+
+        account: LocalAccount = self.from_key(private_key)
+        transaction_dict = cast(TxDict, transaction_dict)
+        # allow from field, *only* if it matches the private key
+        if 'from' in transaction_dict:
+            if normalize_to(transaction_dict['from'], None) == normalize_to(account.address, None):
+                sanitized_transaction = cast(TxDict, dissoc(transaction_dict, 'from'))
+            else:
+                raise ValueError("transaction[from] does match key's hex address: "
+                    f"from's hex address is {Base32Address(transaction_dict['from']).hex_address}, "
+                    f"key's hex address is {account.hex_address}")        
+        else:
+            sanitized_transaction = transaction_dict
+
+        print("sanitized_transaction:", sanitized_transaction)
+
+        # sign transaction
+        (
+            v,
+            r,
+            s,
+            rlp_encoded,
+        ) = sign_transaction_dict(account._key_obj, sanitized_transaction) # type: ignore
+
+        print("size of rlp_encoded:", len(rlp_encoded))
+        transaction_hash = keccak(rlp_encoded)
+
+        return SignedTransaction(
+            rawTransaction=HexBytes(rlp_encoded), # send this item
+            hash=HexBytes(transaction_hash),
+            r=r,
+            s=s,
+            v=v,
+        )
+
+    @combomethod
+    def sign_transaction_post_quantum(
+        self, transaction_dict: TxParam, private_key: Union[bytes, str, PrivateKey]
+    ) -> SignedTransaction:
+        # 加载Rust共享库
+        # ffi = pffi.get_ffi()
+        #account: LocalAccount = self.from_key(private_key)
+        
+        transaction_dict = cast(TxDict, transaction_dict)
+        # print(transaction_dict)
+        
+        sanitized_transaction = cast(TxDict, dissoc(transaction_dict, 'from'))
+        print(sanitized_transaction)
+
+        # signed_message = rust_lib.sign(message, ffi.addressof(key_pair, "secret_key"))
+        # print(signed_message)
+        # sign_transaction_with_quantum(key_pair.secret_key ,sanitized_transaction)
+        
+        # sign transaction
+        encoded_transaction = sign_transaction_dict_post_quantum(sanitized_transaction)
+        # print("encoded_transaction:", encoded_transaction)
+        # print("size of encoded_transaction:", len(encoded_transaction))
+        
+        #
+        #  (
+        #     v,
+        #     r,
+        #     s,
+        #     rlp_encoded,
+        # ) = sign_transaction_dict(account._key_obj, sanitized_transaction) # type: ignore
+
+        transaction_hash = keccak(encoded_transaction)
+
+        return SignedTransaction(
+            rawTransaction=HexBytes(encoded_transaction),
+            hash=HexBytes(transaction_hash),
+            r=0,
+            s=0,
+            v=0,
+        )
+
+    @combomethod
+    def get_key_pair_post_quantum(self):
+        pffi = Pffi()
+        ffi = pffi.get_ffi()
+
+        rust_lib = pffi.get_rust_lib()
+
+        pk_buffer = ffi.new("uint8_t[]", pffi.CRYPTO_PUBLICKEYBYTES)  # 为公钥分配适当大小的缓冲区
+        sk_buffer = ffi.new("uint8_t[]", pffi.CRYPTO_SECRETKEYBYTES)  # 为私钥分配适当大小的缓冲区
+
+        result = rust_lib.pqcrystals_dilithium2_ref_keypair(pk_buffer, sk_buffer)
+        print("result:", result)
+
+        pk_data = bytes(ffi.buffer(pk_buffer, pffi.CRYPTO_PUBLICKEYBYTES))
+        sk_data = bytes(ffi.buffer(sk_buffer, pffi.CRYPTO_SECRETKEYBYTES))
+
+        pk_data = array.array('B', pk_data).tolist()
+        sk_data = array.array('B', sk_data).tolist()
+
+        print("pk_data:", pk_data)
+        print("sk_data:", sk_data)
+
+ 
+    
 
     @combomethod
     def sign_transaction(
@@ -375,3 +527,19 @@ class Account(EthAccount):
         """        
         recovered_address = super().recover_message(signable_message, vrs, signature)
         return to_checksum_address(eth_eoa_address_to_cfx_hex(recovered_address))
+
+    @combomethod
+    def get_test_random(self):
+        pffi = Pffi()
+        ffi = pffi.get_ffi()
+        
+        rust_lib = pffi.get_rust_lib()
+
+        output_buffer = ffi.new("uint8_t[]", 16)  # 创建一个适当大小的输出缓冲区
+        rust_lib.randombytes(output_buffer, ffi.sizeof(output_buffer))
+
+        output_data = bytes(ffi.buffer(output_buffer, ffi.sizeof(output_buffer)))
+       
+        print(output_data)
+
+        #void randombytes(uint8_t* out, size_t outlen);

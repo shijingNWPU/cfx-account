@@ -97,3 +97,15 @@ def test_set_network_id():
     Account.set_w3(w3)
     assert Account.create().network_id == 1
     Account.set_w3(None) # type: ignore
+
+def test():
+    print("test")
+    # Account.get_test_random()
+    # Account.get_key_pair_post_quantum()
+    Account.sign_transaction_post_quantum(transaction, key)
+    # Account.sign_transaction_elliptic_curve(transaction, key)
+
+if __name__ == "__main__":
+    test()
+
+    

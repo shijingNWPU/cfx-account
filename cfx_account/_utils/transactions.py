@@ -72,6 +72,13 @@ class Transaction(HashableRLP):
         ('s', big_endian_int),
     )
 
+class TransactionWithQuantum(HashableRLP):
+    fields = (
+        ('signed_tx', binary),
+        ('tx_meta', UnsignedTransaction),
+        ('public_key', binary)
+    )
+
 
 def serializable_unsigned_transaction_from_dict(transaction_dict: TxDict) -> UnsignedTransaction:
     assert_valid_fields(transaction_dict)
@@ -82,12 +89,24 @@ def serializable_unsigned_transaction_from_dict(transaction_dict: TxDict) -> Uns
         hexstr_if_base32,
         apply_formatters_to_dict(TRANSACTION_FORMATTERS),
     )
+
+    print("filled_transaction:", filled_transaction)
     serializer = UnsignedTransaction
     return serializer.from_dict(filled_transaction)
+
+def encode_transaction_post_quantum(transaction: UnsignedTransaction, signed_message_data: bytes, public_key: bytes):
+        signed_transaction = TransactionWithQuantum(
+            signed_tx = signed_message_data,
+            tx_meta = transaction,
+            public_key = public_key,
+        )
+        # print("signed_transaction:", signed_transaction)
+        return rlp.encode(signed_transaction)
 
 def encode_transaction(unsigned_transaction: UnsignedTransaction, vrs: Tuple[int, int, int]) -> bytes:
     (v, r, s) = vrs
     chain_naive_transaction = dissoc(unsigned_transaction.as_dict(), 'v', 'r', 's')
+    print("chain_naive_transaction:", chain_naive_transaction)
     signed_transaction = Transaction(tx_meta=UnsignedTransaction(**chain_naive_transaction), v=v, r=r, s=s)
     return rlp.encode(signed_transaction) # type: ignore
 
