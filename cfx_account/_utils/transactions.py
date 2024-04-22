@@ -90,7 +90,7 @@ def serializable_unsigned_transaction_from_dict(transaction_dict: TxDict) -> Uns
         apply_formatters_to_dict(TRANSACTION_FORMATTERS),
     )
 
-    print("filled_transaction:", filled_transaction)
+    # print("filled_transaction:", filled_transaction)
     serializer = UnsignedTransaction
     return serializer.from_dict(filled_transaction)
 

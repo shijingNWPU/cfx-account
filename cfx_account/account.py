@@ -86,6 +86,7 @@ import cffi
 import binascii
 from cfx_account._utils.account_ffi import Pffi
 import array
+from typing import NamedTuple
 
 if TYPE_CHECKING:
     from conflux_web3 import Web3
@@ -220,7 +221,7 @@ class Account(EthAccount):
 
     @combomethod
     def sign_transaction_post_quantum(
-        self, transaction_dict: TxParam, private_key: Union[bytes, str, PrivateKey]
+        self, transaction_dict: TxParam, pub_key: str, sec_key: str
     ) -> SignedTransaction:
         # 加载Rust共享库
         # ffi = pffi.get_ffi()
@@ -230,14 +231,14 @@ class Account(EthAccount):
         # print(transaction_dict)
         
         sanitized_transaction = cast(TxDict, dissoc(transaction_dict, 'from'))
-        print(sanitized_transaction)
+        # print(sanitized_transaction)
 
         # signed_message = rust_lib.sign(message, ffi.addressof(key_pair, "secret_key"))
         # print(signed_message)
         # sign_transaction_with_quantum(key_pair.secret_key ,sanitized_transaction)
         
         # sign transaction
-        encoded_transaction = sign_transaction_dict_post_quantum(sanitized_transaction)
+        encoded_transaction = sign_transaction_dict_post_quantum(sanitized_transaction, pub_key, sec_key)
         # print("encoded_transaction:", encoded_transaction)
         # print("size of encoded_transaction:", len(encoded_transaction))
         
@@ -270,16 +271,18 @@ class Account(EthAccount):
         sk_buffer = ffi.new("uint8_t[]", pffi.CRYPTO_SECRETKEYBYTES)  # 为私钥分配适当大小的缓冲区
 
         result = rust_lib.pqcrystals_dilithium2_ref_keypair(pk_buffer, sk_buffer)
-        print("result:", result)
+        # print("result:", result)
 
         pk_data = bytes(ffi.buffer(pk_buffer, pffi.CRYPTO_PUBLICKEYBYTES))
         sk_data = bytes(ffi.buffer(sk_buffer, pffi.CRYPTO_SECRETKEYBYTES))
 
-        pk_data = array.array('B', pk_data).tolist()
-        sk_data = array.array('B', sk_data).tolist()
+        # pk_data = array.array('B', pk_data).tolist()
+        pk_data = binascii.hexlify(array.array('B', pk_data)).decode()
+        sk_data = binascii.hexlify(array.array('B', sk_data)).decode()
 
-        print("pk_data:", pk_data)
-        print("sk_data:", sk_data)
+
+
+        return [pk_data, sk_data]
 
  
     
