@@ -1,4 +1,5 @@
 import cffi
+import os
 
 class Pffi:
     def __init__(self):
@@ -16,7 +17,14 @@ class Pffi:
         self.CRYPTO_SECRETKEYBYTES = 2544
         self.CRYPTO_BYTES = 2420
 
-        self.rust_lib = self.ffi.dlopen('/home/shijing/cfx-account/cfx_account/quantum_sign/rust-dilithium2/depends/dilithium2/libpqcrystals_dilithium2_ref.so')
+        current_file_path = os.path.abspath(__file__)
+        current_directory = os.path.dirname(current_file_path)
+        target_directory = current_directory + "/../quantum_sign/rust-dilithium2/depends/dilithium2/libpqcrystals_dilithium2_ref.so"
+
+
+        self.rust_lib = self.ffi.dlopen(target_directory)
+
+        # self.rust_lib = self.ffi.dlopen('/home/shijing/cfx-account/cfx_account/quantum_sign/rust-dilithium2/depends/dilithium2/libpqcrystals_dilithium2_ref.so')
         
 
     def get_ffi(self):
