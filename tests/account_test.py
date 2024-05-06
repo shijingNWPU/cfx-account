@@ -100,9 +100,10 @@ def test_set_network_id():
 
 def test():
     print("test")
-    # Account.get_test_random()
-    # Account.get_key_pair_post_quantum()
-    Account.sign_transaction_post_quantum(transaction, key)
+    Account.get_test_random()
+    key_pair = Account.get_key_pair_post_quantum()
+    print(key_pair)
+    # Account.sign_transaction_post_quantum(transaction, key)
     # Account.sign_transaction_elliptic_curve(transaction, key)
 
 if __name__ == "__main__":
