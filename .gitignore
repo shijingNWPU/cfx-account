@@ -8,4 +8,3 @@ cfx_account.egg-info/
 __pycache__/
 .hypothesis/
 .vscode/
-cfx_account/quantum_sign/rust-dilithium2

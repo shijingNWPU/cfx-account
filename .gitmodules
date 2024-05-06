@@ -1,0 +1,3 @@
+[submodule "cfx_account/quantum_sign/rust-dilithium2"]
+	path = cfx_account/quantum_sign/rust-dilithium2
+	url = https://github.com/shijingNWPU/rust-dilithium2.git
